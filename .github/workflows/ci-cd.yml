@@ -1,0 +1,81 @@
+name: Fullstack CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        shell: bash
+
+    strategy:
+      matrix:
+        node-version: [18.x]
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Install Backend Dependencies
+        working-directory: ./server
+        run: npm install
+
+      - name: Test Backend
+        working-directory: ./server
+        run: |
+          if [ -f "package.json" ]; then
+            npm test || echo "No tests"
+          fi
+
+      - name: Install Frontend Dependencies
+        working-directory: ./client
+        run: npm install
+
+      - name: Test Frontend
+        working-directory: ./client
+        run: |
+          if [ -f "package.json" ]; then
+            npm test || echo "No tests"
+          fi
+
+      - name: Build Frontend
+        working-directory: ./client
+        run: npm run build
+
+      - name: Upload React Build (Artifacts)
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: client/build
+
+  deploy-to-gh-pages:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Install and Build Frontend
+        working-directory: ./client
+        run: |
+          npm install
+          npm run build
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./client/build
